@@ -1,8 +1,11 @@
 """Run the full interest rate risk analysis and write tables and charts to an output folder.
 
+Data is downloaded from the U.S. Treasury (home.treasury.gov) on each run.
+
 Usage:
     python run.py
-    python run.py --csv treasury_yields.csv --date 2025-06-30 --out outputs
+    python run.py --date 2025-06-30 --start-year 2015
+    python run.py --use-cache          # skip the download, reuse data/treasury_yields.csv
 """
 import argparse
 from pathlib import Path
@@ -10,7 +13,8 @@ from pathlib import Path
 import pandas as pd
 
 from irr import plots
-from irr.curve import curve_on, load_yields
+from irr.curve import curve_on
+from irr.data import load_or_fetch
 from irr.pca import fit_pca, pc_shocked_curves
 from irr.pricing import price_portfolio, sample_portfolio
 from irr.risk import dv01, key_rate_report
@@ -19,7 +23,9 @@ from irr.scenarios import default_scenarios, scenario_pnl
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", default=Path(__file__).parent / "treasury_yields.csv", type=Path)
+    p.add_argument("--start-year", default=2018, type=int, help="First year of history to download.")
+    p.add_argument("--use-cache", action="store_true", help="Reuse the last download instead of fetching.")
+    p.add_argument("--cache", default=Path(__file__).parent / "data" / "treasury_yields.csv", type=Path)
     p.add_argument("--date", default=None, help="As-of date (YYYY-MM-DD). Default: latest in file.")
     p.add_argument("--out", default="outputs", type=Path)
     p.add_argument("--pc-std", default=2.0, type=float, help="Size of PCA shocks in std devs.")
@@ -27,7 +33,8 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     pd.set_option("display.width", 120)
 
-    yields = load_yields(args.csv)
+    yields = load_or_fetch(args.cache, args.start_year, refresh=not args.use_cache)
+    print(f"Treasury data: {len(yields)} days, {yields.index[0].date()} to {yields.index[-1].date()}")
     asof, curve = curve_on(yields, args.date)
 
     portfolio = sample_portfolio()

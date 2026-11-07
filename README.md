@@ -1,6 +1,6 @@
 # Interest Rate Risk & Yield Curve Stress Testing
 
-Measures how a Treasury bond portfolio's value changes when the yield curve moves. Uses daily U.S. Treasury yields from 2018 to 2026.
+Measures how a Treasury bond portfolio's value changes when the yield curve moves. Each run downloads real daily yield curve data from the U.S. Treasury (home.treasury.gov), so the results are always up to date.
 
 The analysis covers:
 
@@ -14,31 +14,34 @@ The analysis covers:
 
 ```bash
 pip install -r requirements.txt
-python run.py                         # latest date in the data
-python run.py --date 2024-06-28       # any other date
-python run.py --pc-std 3 --out results
-python -m pytest                      # 12 tests
+python run.py                         # download data, run on the latest date
+python run.py --date 2024-06-28       # run on an older date
+python run.py --start-year 2010       # use more history for PCA
+python run.py --use-cache             # skip the download, reuse the last one
+python -m pytest                      # offline tests
+IRR_NETWORK_TESTS=1 python -m pytest  # also test the live download
 ```
 
-Tables (CSV) and charts (PNG) go to `outputs/`.
+Tables (CSV) and charts (PNG) go to `outputs/`. The downloaded data is saved to `data/treasury_yields.csv` (not committed).
 
 ## Project layout
 
 ```
 irr/
-  curve.py       load yields, map tenors (1M..30Y) to years
+  data.py        download and clean Treasury yield data
+  curve.py       map tenors (1M..30Y) to years, pick the curve for a date
   pricing.py     bond and portfolio pricing
   risk.py        DV01 and key rate durations
   scenarios.py   curve shocks and scenario P&L
   pca.py         PCA on daily yield changes, PCA shocks
   plots.py       charts
 run.py           runs everything from the command line
-tests/           pytest checks
+tests/           pytest checks (run offline on sample data)
 ```
 
 ## Method
 
-**Data.** Daily par yields for 11 tenors: 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y (decimal, e.g. 0.0426 = 4.26%).
+**Data.** [Daily Treasury Par Yield Curve Rates](https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve) from the U.S. Treasury, from 2018 to today. No API key is needed. The code uses 11 tenors: 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y. It changes percent to decimal (4.86 → 0.0486) and drops days with a missing tenor.
 
 **Portfolio.** Four Treasuries with $100 face each: 2Y (3.5%), 5Y (3.7%), 10Y (4.0%), 30Y (4.5%). Annual coupons.
 
@@ -59,29 +62,31 @@ $$P = \sum_{t=1}^{T} CF_t \, e^{-y_t t}$$
 
 **PCA.** PCA runs on standardized daily yield changes. Signs are fixed so PC1 is "all rates up" and PC2 is "long end up, short end down", so results do not flip between runs. Each shock is 2 standard deviations of that PC's daily score, converted back to yield changes.
 
-## Results (as of 2026-01-22)
+## Results (as of 2026-11-06, 2,213 trading days of history)
+
+These numbers change each time you run it on new data.
 
 | Metric | Value |
 |---|---|
-| Portfolio value | $391.79 |
-| DV01 | −$0.3034 |
-| Sum of key rate DV01s | −$0.3034 (difference 2.5e-5) |
-| Largest key rate exposures | 10Y (30%), 30Y (29%), 5Y (17%) |
+| Portfolio value | $374.19 |
+| DV01 | −$0.2813 |
+| Sum of key rate DV01s | −$0.2813 (difference 2.3e-5) |
+| Largest key rate exposures | 10Y (30%), 30Y (28%), 5Y (17%) |
 
 | Scenario | P&L |
 |---|---|
-| Parallel +100bp | −$28.21 |
-| Steepener | −$6.74 |
-| Twist | +$3.13 |
-| Flattener | +$7.90 |
+| Parallel +100bp | −$26.20 |
+| Steepener | −$5.94 |
+| Twist | +$2.78 |
+| Flattener | +$6.98 |
 
 | PCA factor | Variance explained | 2σ daily P&L |
 |---|---|---|
-| PC1 (Level) | 65.4% | −$3.05 |
-| PC2 (Slope) | 14.3% | −$0.86 |
-| PC3 (Curvature) | 9.0% | +$0.23 |
+| PC1 (Level) | 65.5% | −$2.79 |
+| PC2 (Slope) | 14.4% | −$0.77 |
+| PC3 (Curvature) | 9.0% | +$0.19 |
 
-The first three factors explain 88.7% of daily curve moves. Level is the main risk; the portfolio loses when rates rise and when the curve steepens.
+The first three factors explain 88.9% of daily curve moves. Level is the main risk; the portfolio loses when rates rise and when the curve steepens.
 
 ![Key rate durations](outputs/key_rate_durations.png)
 ![Stress scenarios](outputs/stress_scenarios.png)

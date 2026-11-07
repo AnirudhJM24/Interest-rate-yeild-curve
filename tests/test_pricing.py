@@ -8,8 +8,7 @@ FLAT = pd.Series(0.04, index=[1 / 12, 1, 2, 5, 10, 30])
 
 
 def test_zero_rate_price_is_sum_of_cashflows():
-    flat0 = FLAT * 0
-    assert price_bond(100, 0.05, 5, flat0) == pytest.approx(125)
+    assert price_bond(100, 0.05, 5, FLAT * 0) == pytest.approx(125)
 
 
 def test_flat_curve_matches_closed_form():
@@ -20,7 +19,3 @@ def test_flat_curve_matches_closed_form():
 
 def test_price_falls_when_rates_rise(portfolio, curve):
     assert portfolio_value(portfolio, curve + 0.01) < portfolio_value(portfolio, curve)
-
-
-def test_matches_original_notebook(portfolio, curve):
-    assert portfolio_value(portfolio, curve) == pytest.approx(391.785115, abs=1e-5)

@@ -1,10 +1,18 @@
+import numpy as np
+import pandas as pd
 import pytest
 
+from irr.pricing import price_bond, sample_portfolio
 from irr.risk import dv01, key_rate_report
 
 
-def test_dv01_matches_notebook(portfolio, curve):
-    assert dv01(portfolio, curve) == pytest.approx(-0.303399, abs=1e-6)
+def test_dv01_matches_duration_on_flat_curve():
+    flat = pd.Series(0.04, index=[1, 2, 5, 10, 30])
+    port = sample_portfolio().iloc[[2]]        # 10Y bond only
+    t = np.arange(1, 11)
+    cf = np.full(10, 4.0); cf[-1] += 100
+    expected = -(cf * t * np.exp(-0.04 * t)).sum() * 1e-4   # -P * D * 1bp
+    assert dv01(port, flat) == pytest.approx(expected, rel=1e-3)
 
 
 def test_key_rates_add_up_to_dv01(portfolio, curve):

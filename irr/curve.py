@@ -1,6 +1,4 @@
-"""Load Treasury yield data and build a yield curve indexed by maturity in years."""
-from pathlib import Path
-
+"""Tenor mapping and yield curve helpers."""
 import pandas as pd
 
 MATURITY_YEARS = {
@@ -18,14 +16,6 @@ MATURITY_YEARS = {
 }
 
 
-def load_yields(csv_path: str | Path) -> pd.DataFrame:
-    """Read daily yields (decimal) with dates as the index and tenor labels as columns."""
-    yields = pd.read_csv(csv_path, index_col=0, parse_dates=True)
-    missing = set(MATURITY_YEARS) - set(yields.columns)
-    if missing:
-        raise ValueError(f"CSV is missing tenor columns: {sorted(missing)}")
-    return yields[list(MATURITY_YEARS)].sort_index()
-
 
 def to_years(curve_by_label: pd.Series) -> pd.Series:
     """Convert a curve indexed by tenor label ('2Y') into one indexed by years (2.0)."""
@@ -33,6 +23,9 @@ def to_years(curve_by_label: pd.Series) -> pd.Series:
 
 
 def curve_on(yields: pd.DataFrame, date=None) -> tuple[pd.Timestamp, pd.Series]:
-    """Return (as-of date, curve in years) for a date. Defaults to the latest date."""
-    asof = yields.index[-1] if date is None else pd.Timestamp(date)
+    """Return (as-of date, curve in years). Defaults to the latest date.
+
+    If the date is not a trading day, the last trading day before it is used.
+    """
+    asof = yields.index[-1] if date is None else yields.index[yields.index <= pd.Timestamp(date)][-1]
     return asof, to_years(yields.loc[asof])
